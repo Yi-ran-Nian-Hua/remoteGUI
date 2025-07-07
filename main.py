@@ -13,6 +13,8 @@ tab_bar = None
 tab_area = None
 current_tab = None  # 全局current_tab变量
 selected_record_ids = set()  # 存储选中的历史记录ID
+search_input = None  # 搜索框
+search_keyword = ""  # 搜索关键词
 
 # 模拟历史记录数据
 history_records = [
@@ -114,25 +116,28 @@ def send_request(tab_name, tab_data):
             comment = controls[3].value
             params.append({'key': key, 'value': value, 'type': dtype, 'comment': comment})
     print(f"发送参数 [{tab_name}]:", params)
-    
-    # 创建只包含 key 和 value 的结果数据
-    result_data = {}
-    for param in params:
-        if param['key']:  # 只添加有 key 的参数
-            result_data[param['key']] = param['value']
-    
-    # 更新选项卡的结果数据
-    tab_data["json_data"] = result_data
-    tab_data["has_result"] = True
-    
-    # 直接更新结果区域的显示
+    # 设置loading
+    tab_data["loading"] = True
     if tab_data.get("result_container"):
         tab_data["result_container"].clear()
         with tab_data["result_container"]:
-            formatted_json = json.dumps(result_data, indent=4, ensure_ascii=False)
+            ui.spinner(size='lg').classes('mx-auto my-8')
+    # 创建只包含 key 和 value 的结果数据
+    result_data = {}
+    for param in params:
+        if param['key']:
+            result_data[param['key']] = param['value']
+    # 模拟异步请求（实际可用await/回调等）
+    import time
+    time.sleep(1)  # 这里用sleep模拟，实际应用异步
+    formatted_json = json.dumps(result_data, indent=4, ensure_ascii=False)
+    tab_data["json_data"] = result_data
+    tab_data["has_result"] = True
+    tab_data["loading"] = False
+    if tab_data.get("result_container"):
+        tab_data["result_container"].clear()
+        with tab_data["result_container"]:
             ui.code(formatted_json).classes('w-full h-auto background:#f5f5f5')
-    
-    # 保存到历史记录
     save_to_history(tab_name, result_data, formatted_json)
 
 def save_to_history(interface_name, parameters, result):
@@ -191,22 +196,29 @@ def save_current_data(tab_name, tab_data):
 def load_history_record(record):
     """从历史记录加载数据到新选项卡"""
     global tabs, tab_bar, tab_area
-    # 创建新选项卡
-    tab_name = f"历史记录-{record['interface']}-{record['id']}"
+    # 只用接口名作为tab标题，若重名自动编号
+    base_name = record['interface']
+    tab_name = base_name
+    i = 1
+    existing_names = set([name for name in tabs.keys()])
+    while tab_name in existing_names:
+        tab_name = f"{base_name}({i})"
+        i += 1
+    # tab的key用tab_name+id保证唯一
+    tab_key = f"{tab_name}__{record['id']}"
     tab_data = {
         "param_rows": [],
         "param_container": None,
         "has_result": True,
         "json_data": record["parameters"],
-        "result": record["result"]
+        "result": record["result"],
+        "display_name": tab_name,
+        "from_history": True,
+        "loading": False
     }
-    tabs[tab_name] = tab_data
-    
-    # 添加选项卡按钮
-    create_tab_button(tab_name, tab_bar, tab_area, tabs)
-    
-    # 切换到新选项卡
-    switch_tab(tab_name, tab_area, tabs)
+    tabs[tab_key] = tab_data
+    create_tab_button(tab_key, tab_bar, tab_area, tabs)
+    switch_tab(tab_key, tab_area, tabs)
 
 def switch_tab(tab_name, tab_area, tabs):
     global current_tab, tab_bar
@@ -214,12 +226,12 @@ def switch_tab(tab_name, tab_area, tabs):
     tab_area.clear()
     tab_data = tabs[tab_name]
     render_tab_bar(tabs, tab_bar, tab_area)
-    
     with tab_area:
         ui.label('参数列表填写区域').classes('font-bold text-lg')
         with ui.row().classes('w-full gap-2'):
             ui.button('发送请求', on_click=lambda: send_request(tab_name, tab_data)).classes('bg-blue-500 text-white')
             ui.button('保存', on_click=lambda: save_current_data(tab_name, tab_data)).classes('bg-green-500 text-white')
+            ui.button('清空', on_click=lambda: clear_param_inputs(tab_data)).classes('bg-gray-500 text-white')
         with ui.scroll_area().classes('h-[50vh] w-full'):
             # 添加表头
             with ui.row().classes('w-full gap-2 items-center py-2 border-b border-gray-300 bg-gray-50'):
@@ -229,7 +241,7 @@ def switch_tab(tab_name, tab_area, tabs):
                 ui.label('备注').classes('w-40 text-sm font-bold text-gray-700')
             tab_data["param_container"] = ui.column().classes('w-full gap-2')
             # 如果是历史记录选项卡，从历史数据加载参数
-            if tab_name.startswith("历史记录-") and tab_data.get("json_data"):
+            if tab_data.get("from_history") and tab_data.get("json_data"):
                 for key, value in tab_data["json_data"].items():
                     add_param_row(tab_data, key, "string", value)
             else:
@@ -244,9 +256,14 @@ def switch_tab(tab_name, tab_area, tabs):
                         add_param_row(tab_data)
         ui.separator()
         ui.label('调用结果区域').classes('font-bold text-lg')
-        tab_data["result_container"] = ui.column().classes('w-full')
-        if tab_data.get("has_result", False):
-            if tab_name.startswith("历史记录-") and tab_data.get("result"):
+        # 结果区域加loading遮罩
+        result_classes = 'w-full' + (' pointer-events-none select-none opacity-60 bg-gray-100' if tab_data.get('loading') else '')
+        tab_data["result_container"] = ui.column().classes(result_classes)
+        if tab_data.get("loading"):
+            with tab_data["result_container"]:
+                ui.spinner(size='lg').classes('mx-auto my-8')
+        elif tab_data.get("has_result", False):
+            if tab_data.get("from_history") and tab_data.get("result"):
                 with tab_data["result_container"]:
                     ui.code(tab_data["result"]).classes('w-full h-auto background:#f5f5f5')
             else:
@@ -259,10 +276,10 @@ def switch_tab(tab_name, tab_area, tabs):
 
 def create_tab_button(tab_name, tab_bar, tab_area, tabs):
     global current_tab
-    is_active = current_tab == tab_name
-    bg_class = 'bg-blue-100 border-b-2 border-blue-500' if is_active else 'bg-white hover:bg-gray-50'
+    bg_class = 'bg-blue-100 border-b-2 border-blue-500' if current_tab == tab_name else 'bg-white hover:bg-gray-50'
     tab_data = tabs[tab_name]
     editing = tab_data.get('editing', False)
+    display_name = tab_data.get('display_name', tab_name)
     with tab_bar:
         with ui.row().classes(f'{bg_class} flex items-center rounded-t-lg px-4 py-1.5 mr-1').on(
             'dblclick', lambda e, name=tab_name: start_edit_tab_name(name, tabs, tab_bar, tab_area)
@@ -281,9 +298,9 @@ def create_tab_button(tab_name, tab_bar, tab_area, tabs):
                     else:
                         tabs[old_name]['editing'] = False
                         render_tab_bar(tabs, tab_bar, tab_area)
-                ui.input(value=tab_name).classes('w-24 text-black text-center bg-transparent border-none shadow-none p-0').props('dense autofocus').on('blur', save_name).on('keydown.enter', save_name)
+                ui.input(value=display_name).classes('w-24 text-black text-center bg-transparent border-none shadow-none p-0').props('dense autofocus').on('blur', save_name).on('keydown.enter', save_name)
             else:
-                ui.button(tab_name, on_click=partial(switch_tab, tab_name, tab_area, tabs))\
+                ui.button(display_name, on_click=partial(switch_tab, tab_name, tab_area, tabs))\
                     .classes('bg-transparent text-black border-none shadow-none p-0')\
                     .props('flat')
             def delete_tab(tab_name=tab_name):
@@ -302,7 +319,7 @@ def render_tab_bar(tabs, tab_bar, tab_area):
     with tab_bar:
         with ui.row().classes('bg-white hover:bg-gray-50 flex items-center rounded-t-lg px-4 py-1.5 mr-1'):
             ui.button('+', on_click=lambda: create_new_tab(tabs, tab_bar, tab_area))\
-                .classes('bg-transparent text-black border-none shadow-none p-0 text-xl font-bold min-w-[2.5rem] min-h-[2.5rem] flex items-center justify-center mt-1')\
+                .classes('bg-transparent text-black border-none shadow-none p-0 text-xl font-bold min-w-[1rem] min-h-[2rem] flex items-center justify-center mt-1 ml-1')\
                 .props('flat')
         # 其他tab
         for remaining_tab_name in tabs.keys():
@@ -334,7 +351,8 @@ def create_new_tab(tabs, tab_bar, tab_area):
                 "result": [1, 2, 3]
             }
         },
-        "status": "未调用"
+        "status": "未调用",
+        "loading": False
     }
     tabs[tab_name] = tab_data
     render_tab_bar(tabs, tab_bar, tab_area)
@@ -366,7 +384,7 @@ def add_param_row(tab_data, param_name=None, param_type=None, param_value=None):
 
 def switch_status(status, display_area):
     """切换左侧显示状态"""
-    global current_status, expanded_groups
+    global current_status, expanded_groups, search_keyword
     current_status = status
     display_area.clear()
     
@@ -441,7 +459,29 @@ def switch_status(status, display_area):
                 ]
             }
             
+            # 搜索过滤逻辑
+            filtered_groups = {}
             for group_name, interfaces in interface_groups.items():
+                if search_keyword:
+                    # 过滤接口
+                    filtered_interfaces = []
+                    for interface in interfaces:
+                        if (search_keyword.lower() in interface["name"].lower() or 
+                            search_keyword.lower() in interface["method"].lower() or
+                            search_keyword.lower() in interface["url"].lower()):
+                            filtered_interfaces.append(interface)
+                    
+                    if filtered_interfaces:  # 只有当组内有匹配的接口时才显示该组
+                        filtered_groups[group_name] = filtered_interfaces
+                else:
+                    filtered_groups[group_name] = interfaces
+            
+            # 如果没有搜索结果
+            if search_keyword and not filtered_groups:
+                ui.label('未查找到结果').classes('text-gray-500 text-center py-8')
+                return
+            
+            for group_name, interfaces in filtered_groups.items():
                 # 点击展开/收起
                 def toggle_group(name=group_name):
                     expanded_groups[name] = not expanded_groups.get(name, False)
@@ -500,7 +540,23 @@ def switch_status(status, display_area):
                 ui.button('全选', on_click=select_all_records).classes('bg-blue-500 text-white')
                 ui.button('取消全选', on_click=deselect_all_records).classes('bg-gray-500 text-white')
             
-            for record in history_records:
+            # 搜索过滤历史记录
+            filtered_records = []
+            if search_keyword:
+                for record in history_records:
+                    if (search_keyword.lower() in record["interface"].lower() or 
+                        search_keyword.lower() in record["status"].lower() or
+                        search_keyword.lower() in record["time"].lower()):
+                        filtered_records.append(record)
+            else:
+                filtered_records = history_records
+            
+            # 如果没有搜索结果
+            if search_keyword and not filtered_records:
+                ui.label('未查找到结果').classes('text-gray-500 text-center py-8')
+                return
+            
+            for record in filtered_records:
                 def on_checkbox_change(e, record_id=record["id"]):
                     if e.value:
                         selected_record_ids.add(record_id)
@@ -519,7 +575,18 @@ def switch_status(status, display_area):
                         "未调用": "bg-gray-400"
                     }
                     ui.label(record["status"]).classes(f'px-2 py-1 rounded text-white text-sm {status_color.get(record["status"], "bg-gray-400")}')
-                    ui.label(f"耗时: {record['duration']}" ).classes('text-gray-600 text-sm')
+                    耗时显示 = record["duration"] if record["status"] != "未调用" else "-"
+                    ui.label(f"耗时: {耗时显示}").classes('text-gray-600 text-sm')
+
+def clear_param_inputs(tab_data):
+    # 清空所有参数输入框内容
+    for row in tab_data.get('param_rows', []):
+        if hasattr(row, 'default_slot') and row.default_slot.children:
+            controls = row.default_slot.children
+            if len(controls) >= 4:
+                # controls[2] 是 Value 输入框，controls[3] 是备注输入框
+                controls[2].value = ''
+                controls[3].value = ''
 
 # 禁用页面滚动
 ui.add_body_html('<style>body { overflow: hidden; }</style>')
@@ -541,8 +608,22 @@ with ui.row().classes('w-full h-screen mt-16'):
         # 上方搜索框 - 居中并占满宽度
         with ui.row().classes('w-full justify-center px-2 py-2'):
             with ui.row().classes('w-full max-w-sm gap-2'):
-                ui.input(placeholder='搜索...').classes('flex-1')
-                ui.button('搜索').classes('bg-blue-500 text-white')
+                def on_search_change(e):
+                    global search_keyword
+                    search_keyword = e.value
+                    # 重新渲染当前状态
+                    switch_status(current_status, display_area)
+                
+                def clear_search():
+                    global search_keyword
+                    search_keyword = ""
+                    if search_input:
+                        search_input.value = ""
+                    # 重新渲染当前状态
+                    switch_status(current_status, display_area)
+                
+                search_input = ui.input(placeholder='搜索...', on_change=on_search_change).classes('flex-1')
+                ui.button('清空', on_click=clear_search).classes('bg-gray-500 text-white')
         # 下方展示数据区域
         with ui.scroll_area().classes("h-screen"):
             display_area = ui.column().classes('w-full -m-3')
