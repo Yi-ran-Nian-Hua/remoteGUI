@@ -102,17 +102,19 @@ def deselect_all_records():
 def send_request(tab_name, tab_data):
     global history_records
     params = []
-    if not tab_data["param_rows"]:
-        print("参数行未初始化")
+    if not tab_data.get("params"):
+        print("参数数据未初始化")
         return
-    for row in tab_data["param_rows"]:
-        if hasattr(row, 'default_slot') and row.default_slot.children:
-            controls = row.default_slot.children
-            key = controls[0].text
-            dtype = controls[1].text
-            value = controls[2].value
-            comment = controls[3].value
-            params.append({'key': key, 'value': value, 'type': dtype, 'comment': comment})
+    
+    # 直接从参数数据读取
+    for param in tab_data["params"]:
+        params.append({
+            'key': param["key"], 
+            'value': param["value"], 
+            'type': param["type"], 
+            'comment': param["comment"]
+        })
+    
     print(f"发送参数 [{tab_name}]:", params)
     
     # 创建只包含 key 和 value 的结果数据
@@ -160,15 +162,14 @@ def save_current_data(tab_name, tab_data):
     """保存当前选项卡的数据到历史记录"""
     # 收集当前参数
     params = []
-    if tab_data["param_rows"]:
-        for row in tab_data["param_rows"]:
-            if hasattr(row, 'default_slot') and row.default_slot.children:
-                controls = row.default_slot.children
-                key = controls[0].text
-                dtype = controls[1].text
-                value = controls[2].value
-                comment = controls[3].value
-                params.append({'key': key, 'value': value, 'type': dtype, 'comment': comment})
+    if tab_data.get("params"):
+        for param in tab_data["params"]:
+            params.append({
+                'key': param["key"], 
+                'value': param["value"], 
+                'type': param["type"], 
+                'comment': param["comment"]
+            })
     
     # 创建参数数据
     result_data = {}
@@ -198,7 +199,8 @@ def load_history_record(record):
         "param_container": None,
         "has_result": True,
         "json_data": record["parameters"],
-        "result": record["result"]
+        "result": record["result"],
+        "params": []  # 初始化参数数据
     }
     tabs[tab_name] = tab_data
     
@@ -210,6 +212,11 @@ def load_history_record(record):
 
 def switch_tab(tab_name, tab_area, tabs):
     global current_tab, tab_bar
+    # 保存当前tab的参数状态（如果有的话）
+    if current_tab and current_tab in tabs:
+        current_tab_data = tabs[current_tab]
+        # 参数数据已经在on_change事件中自动保存，这里不需要额外操作
+    
     current_tab = tab_name
     tab_area.clear()
     tab_data = tabs[tab_name]
@@ -220,6 +227,7 @@ def switch_tab(tab_name, tab_area, tabs):
         with ui.row().classes('w-full gap-2'):
             ui.button('发送请求', on_click=lambda: send_request(tab_name, tab_data)).classes('bg-blue-500 text-white')
             ui.button('保存', on_click=lambda: save_current_data(tab_name, tab_data)).classes('bg-green-500 text-white')
+            ui.button('清空', on_click=lambda: clear_params(tab_name, tab_data)).classes('bg-gray-500 text-white')
         with ui.scroll_area().classes('h-[50vh] w-full'):
             # 添加表头
             with ui.row().classes('w-full gap-2 items-center py-2 border-b border-gray-300 bg-gray-50'):
@@ -233,15 +241,10 @@ def switch_tab(tab_name, tab_area, tabs):
                 for key, value in tab_data["json_data"].items():
                     add_param_row(tab_data, key, "string", value)
             else:
-                for row_data in tab_data["param_rows"]:
-                    if hasattr(row_data, 'default_slot') and row_data.default_slot.children:
-                        key_label = row_data.default_slot.children[1]  # Key标签
-                        type_label = row_data.default_slot.children[2]  # 类型标签
-                        param_name = key_label.text if hasattr(key_label, 'text') else ''
-                        param_type = type_label.text if hasattr(type_label, 'text') else 'string'
-                        add_param_row(tab_data, param_name, param_type)
-                    else:
-                        add_param_row(tab_data)
+                # 从现有参数数据重新生成UI
+                if tab_data.get("params"):
+                    for param in tab_data["params"]:
+                        add_param_row(tab_data, param["key"], param["type"], param["value"], param["comment"], add_to_data=False)
         ui.separator()
         ui.label('调用结果区域').classes('font-bold text-lg')
         tab_data["result_container"] = ui.column().classes('w-full')
@@ -321,7 +324,11 @@ def delete_tab_by_name(tab_name, tabs, tab_bar, tab_area):
             create_new_tab(tabs, tab_bar, tab_area)
 
 def create_new_tab(tabs, tab_bar, tab_area):
-    tab_name = f"Request {len(tabs)+1}"
+    base = "Request"
+    i = 1
+    while f"{base} {i}" in tabs:
+        i += 1
+    tab_name = f"{base} {i}"
     tab_data = {
         "param_rows": [],
         "param_container": None,
@@ -334,7 +341,8 @@ def create_new_tab(tabs, tab_bar, tab_area):
                 "result": [1, 2, 3]
             }
         },
-        "status": "未调用"
+        "status": "未调用",
+        "params": []  # 初始化参数数据
     }
     tabs[tab_name] = tab_data
     render_tab_bar(tabs, tab_bar, tab_area)
@@ -346,22 +354,51 @@ def update_param_list(params):
     global current_tab, tabs
     if current_tab and current_tab in tabs:
         tab_data = tabs[current_tab]
-        # 清空现有参数行
-        tab_data["param_rows"].clear()
+        # 清空现有参数数据
+        tab_data["params"] = []
+        tab_data["param_rows"] = []
         if tab_data["param_container"]:
             tab_data["param_container"].clear()
             # 重新添加参数行
             for param in params:
                 add_param_row(tab_data, param["name"], param["type"])
 
-def add_param_row(tab_data, param_name=None, param_type=None, param_value=None):
+def add_param_row(tab_data, param_name=None, param_type=None, param_value=None, param_comment=None, add_to_data=True):
+    """添加参数行，数据与UI分离"""
+    # 创建参数数据
+    param_data = {
+        "key": param_name or "",
+        "type": param_type or "string", 
+        "value": param_value or "",
+        "comment": param_comment or ""
+    }
+    
+    # 将参数数据添加到tab的params列表（仅在需要时）
+    if add_to_data:
+        if "params" not in tab_data:
+            tab_data["params"] = []
+        tab_data["params"].append(param_data)
+    
+    # 生成UI
     with tab_data["param_container"]:
         row = ui.row().classes('gap-2 w-full items-center')
         with row:
-            ui.label(param_name or '').classes('w-32 text-sm font-medium')
-            ui.label(param_type or 'string').classes('w-24 text-sm text-gray-600')
-            value_input = ui.input(placeholder='Value', value=param_value or '').classes('w-48')
-            ui.input(placeholder='备注').classes('w-40')
+            ui.label(param_data["key"]).classes('w-32 text-sm font-medium')
+            ui.label(param_data["type"]).classes('w-24 text-sm text-gray-600')
+            
+            # Value输入框，绑定到数据
+            def update_value(e, param=param_data):
+                param["value"] = e.value
+            value_input = ui.input(placeholder='Value', value=param_data["value"]).classes('w-48').on('change', update_value)
+            
+            # 备注输入框，绑定到数据
+            def update_comment(e, param=param_data):
+                param["comment"] = e.value
+            comment_input = ui.input(placeholder='备注', value=param_data["comment"]).classes('w-40').on('change', update_comment)
+        
+        # 保存UI引用（可选）
+        if "param_rows" not in tab_data:
+            tab_data["param_rows"] = []
         tab_data["param_rows"].append(row)
 
 def switch_status(status, display_area):
@@ -521,6 +558,14 @@ def switch_status(status, display_area):
                     ui.label(record["status"]).classes(f'px-2 py-1 rounded text-white text-sm {status_color.get(record["status"], "bg-gray-400")}')
                     ui.label(f"耗时: {record['duration']}" ).classes('text-gray-600 text-sm')
 
+def clear_params(tab_name, tab_data):
+    """清空当前选项卡的参数"""
+    # 清空参数数据
+    tab_data["params"] = []
+    tab_data["param_rows"] = []
+    if tab_data["param_container"]:
+        tab_data["param_container"].clear()
+
 # 禁用页面滚动
 ui.add_body_html('<style>body { overflow: hidden; }</style>')
 
@@ -530,7 +575,7 @@ with ui.header().classes("bg-blue-500 text-white"):
 
 
 # 下方功能区
-with ui.row().classes('w-full h-screen mt-16'):
+with ui.row().classes('w-full h-screen mt-0'):
     # 左侧功能选择按钮
     with ui.column():
         ui.button('接口列表', on_click=lambda: switch_status("接口列表", display_area)).classes('w-full mb-2')
