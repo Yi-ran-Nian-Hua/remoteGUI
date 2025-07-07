@@ -410,123 +410,151 @@ def switch_status(status, display_area):
     with display_area:
         if status == "接口列表":
             ui.label('接口列表').classes('text-xl font-bold mb-4')
-            # 模拟接口分组数据
+            # 新的接口分组数据结构
             interface_groups = {
                 "用户管理": [
-                    {"name": "用户登录", "method": "POST", "url": "/api/login", "status": "active"},
-                    {"name": "获取用户信息", "method": "GET", "url": "/api/user/info", "status": "active"},
-                    {"name": "更新用户资料", "method": "PUT", "url": "/api/user/profile", "status": "inactive"},
-                    {"name": "删除用户", "method": "DELETE", "url": "/api/user/{id}", "status": "active"},
-                    {"name": "获取用户列表", "method": "GET", "url": "/api/users", "status": "active"},
-                    {"name": "创建用户", "method": "POST", "url": "/api/users", "status": "active"},
-                    {"name": "批量删除用户", "method": "DELETE", "url": "/api/users/batch", "status": "active"},
+                    {"name": "登录", "params": [
+                        {"name": "username", "type": "string"},
+                        {"name": "password", "type": "string"}
+                    ]},
+                    {"name": "获取信息", "params": [
+                        {"name": "user_id", "type": "int"}
+                    ]},
+                    {"name": "更新资料", "params": [
+                        {"name": "user_id", "type": "int"},
+                        {"name": "name", "type": "string"},
+                        {"name": "email", "type": "string"}
+                    ]},
+                    {"name": "重置密码", "params": [
+                        {"name": "user_id", "type": "int"},
+                        {"name": "new_password", "type": "string"}
+                    ]},
+                    {"name": "禁用账号", "params": [
+                        {"name": "user_id", "type": "int"},
+                        {"name": "reason", "type": "string"}
+                    ]},
                 ],
                 "权限管理": [
-                    {"name": "用户权限查询", "method": "GET", "url": "/api/user/permissions", "status": "inactive"},
-                    {"name": "修改用户权限", "method": "PUT", "url": "/api/user/permissions", "status": "active"},
-                    {"name": "用户角色分配", "method": "POST", "url": "/api/user/roles", "status": "active"},
-                    {"name": "获取角色列表", "method": "GET", "url": "/api/roles", "status": "active"},
-                    {"name": "创建角色", "method": "POST", "url": "/api/roles", "status": "active"},
-                    {"name": "更新角色", "method": "PUT", "url": "/api/roles/{id}", "status": "active"},
-                    {"name": "删除角色", "method": "DELETE", "url": "/api/roles/{id}", "status": "active"},
-                    {"name": "获取权限列表", "method": "GET", "url": "/api/permissions", "status": "active"},
-                    {"name": "创建权限", "method": "POST", "url": "/api/permissions", "status": "active"},
-                    {"name": "更新权限", "method": "PUT", "url": "/api/permissions/{id}", "status": "active"},
-                    {"name": "删除权限", "method": "DELETE", "url": "/api/permissions/{id}", "status": "active"},
+                    {"name": "分配角色", "params": [
+                        {"name": "user_id", "type": "int"},
+                        {"name": "role_ids", "type": "list"}
+                    ]},
+                    {"name": "查询权限", "params": [
+                        {"name": "user_id", "type": "int"}
+                    ]},
+                    {"name": "添加权限", "params": [
+                        {"name": "permission_name", "type": "string"},
+                        {"name": "description", "type": "string"}
+                    ]},
+                    {"name": "删除权限", "params": [
+                        {"name": "permission_id", "type": "int"}
+                    ]},
+                    {"name": "修改权限", "params": [
+                        {"name": "permission_id", "type": "int"},
+                        {"name": "new_name", "type": "string"}
+                    ]},
                 ],
                 "部门管理": [
-                    {"name": "获取部门列表", "method": "GET", "url": "/api/departments", "status": "active"},
-                    {"name": "创建部门", "method": "POST", "url": "/api/departments", "status": "active"},
-                    {"name": "更新部门", "method": "PUT", "url": "/api/departments/{id}", "status": "active"},
-                    {"name": "删除部门", "method": "DELETE", "url": "/api/departments/{id}", "status": "active"},
-                ],
-                "菜单管理": [
-                    {"name": "获取菜单列表", "method": "GET", "url": "/api/menus", "status": "active"},
-                    {"name": "创建菜单", "method": "POST", "url": "/api/menus", "status": "active"},
-                    {"name": "更新菜单", "method": "PUT", "url": "/api/menus/{id}", "status": "active"},
-                    {"name": "删除菜单", "method": "DELETE", "url": "/api/menus/{id}", "status": "active"},
+                    {"name": "获取部门列表", "params": []},
+                    {"name": "添加部门", "params": [
+                        {"name": "dept_name", "type": "string"},
+                        {"name": "leader", "type": "string"}
+                    ]},
+                    {"name": "删除部门", "params": [
+                        {"name": "dept_id", "type": "int"}
+                    ]},
+                    {"name": "修改部门", "params": [
+                        {"name": "dept_id", "type": "int"},
+                        {"name": "new_name", "type": "string"}
+                    ]},
                 ],
                 "系统管理": [
-                    {"name": "获取系统配置", "method": "GET", "url": "/api/system/config", "status": "active"},
-                    {"name": "更新系统配置", "method": "PUT", "url": "/api/system/config", "status": "active"},
-                    {"name": "获取系统日志", "method": "GET", "url": "/api/system/logs", "status": "active"},
-                    {"name": "清理系统日志", "method": "DELETE", "url": "/api/system/logs", "status": "active"},
+                    {"name": "获取系统配置", "params": []},
+                    {"name": "更新系统配置", "params": [
+                        {"name": "config_key", "type": "string"},
+                        {"name": "config_value", "type": "string"}
+                    ]},
+                    {"name": "查看日志", "params": [
+                        {"name": "page", "type": "int"},
+                        {"name": "size", "type": "int"}
+                    ]},
+                    {"name": "清理日志", "params": [
+                        {"name": "days", "type": "int"}
+                    ]},
                 ],
                 "文件管理": [
-                    {"name": "获取文件列表", "method": "GET", "url": "/api/files", "status": "active"},
-                    {"name": "上传文件", "method": "POST", "url": "/api/files/upload", "status": "active"},
-                    {"name": "下载文件", "method": "GET", "url": "/api/files/{id}/download", "status": "active"},
-                    {"name": "删除文件", "method": "DELETE", "url": "/api/files/{id}", "status": "active"},
+                    {"name": "上传文件", "params": [
+                        {"name": "file", "type": "file"},
+                        {"name": "desc", "type": "string"}
+                    ]},
+                    {"name": "下载文件", "params": [
+                        {"name": "file_id", "type": "int"}
+                    ]},
+                    {"name": "删除文件", "params": [
+                        {"name": "file_id", "type": "int"}
+                    ]},
+                    {"name": "获取文件列表", "params": [
+                        {"name": "folder", "type": "string"}
+                    ]},
                 ],
                 "通知管理": [
-                    {"name": "获取通知列表", "method": "GET", "url": "/api/notifications", "status": "active"},
-                    {"name": "发送通知", "method": "POST", "url": "/api/notifications", "status": "active"},
-                    {"name": "标记通知已读", "method": "PUT", "url": "/api/notifications/{id}/read", "status": "active"},
-                    {"name": "删除通知", "method": "DELETE", "url": "/api/notifications/{id}", "status": "active"},
+                    {"name": "获取通知列表", "params": [
+                        {"name": "user_id", "type": "int"}
+                    ]},
+                    {"name": "发送通知", "params": [
+                        {"name": "title", "type": "string"},
+                        {"name": "content", "type": "string"}
+                    ]},
+                    {"name": "删除通知", "params": [
+                        {"name": "notification_id", "type": "int"}
+                    ]},
                 ],
                 "数据管理": [
-                    {"name": "获取统计数据", "method": "GET", "url": "/api/statistics", "status": "active"},
-                    {"name": "导出数据", "method": "GET", "url": "/api/export", "status": "active"},
-                    {"name": "导入数据", "method": "POST", "url": "/api/import", "status": "active"},
-                    {"name": "备份数据", "method": "POST", "url": "/api/backup", "status": "active"},
-                    {"name": "恢复数据", "method": "POST", "url": "/api/restore", "status": "active"},
+                    {"name": "导出数据", "params": [
+                        {"name": "type", "type": "string"},
+                        {"name": "format", "type": "string"}
+                    ]},
+                    {"name": "导入数据", "params": [
+                        {"name": "file", "type": "file"}
+                    ]},
+                    {"name": "备份数据", "params": [
+                        {"name": "backup_name", "type": "string"}
+                    ]},
+                    {"name": "恢复数据", "params": [
+                        {"name": "backup_id", "type": "string"}
+                    ]},
                 ],
                 "系统服务": [
-                    {"name": "获取API文档", "method": "GET", "url": "/api/docs", "status": "active"},
-                    {"name": "健康检查", "method": "GET", "url": "/api/health", "status": "active"},
-                    {"name": "获取版本信息", "method": "GET", "url": "/api/version", "status": "active"},
+                    {"name": "健康检查", "params": []},
+                    {"name": "获取版本信息", "params": []},
+                    {"name": "获取API文档", "params": []},
                 ]
             }
             
-            for group_name, interfaces in interface_groups.items():
+            for group_name, methods in interface_groups.items():
                 # 点击展开/收起
                 def toggle_group(name=group_name):
                     expanded_groups[name] = not expanded_groups.get(name, False)
-                    # 重新渲染整个接口列表
                     switch_status("接口列表", display_area)
-                
-                # 创建组标题行
                 with ui.row().classes('w-full items-center py-2 border-b border-gray-200 cursor-pointer hover:bg-gray-50'):
-                    # 展开/收起图标（可点击）
                     expanded = expanded_groups.get(group_name, False)
                     ui.button('', on_click=toggle_group).props('flat').classes('p-0 min-w-0 bg-transparent').classes('text-gray-500 hover:text-blue-500').props('icon=expand_more' if expanded else 'icon=chevron_right')
-                    
                     ui.label(group_name).classes('font-bold flex-1 ml-2')
-                    ui.label(f"({len(interfaces)}个接口)").classes('text-gray-500 text-sm')
-                
-                # 如果展开，显示接口列表
-                if expanded_groups.get(group_name, False):
-                    for interface in interfaces:
-                        # 模拟接口参数（包含类型信息）
-                        params = []
-                        if interface["method"] == "GET":
-                            params = [{"name": "page", "type": "int"}, {"name": "size", "type": "int"}, {"name": "keyword", "type": "string"}]
-                        elif interface["method"] == "POST":
-                            params = [{"name": "username", "type": "string"}, {"name": "password", "type": "string"}, {"name": "email", "type": "string"}]
-                        elif interface["method"] == "PUT":
-                            params = [{"name": "id", "type": "int"}, {"name": "name", "type": "string"}, {"name": "description", "type": "string"}]
-                        elif interface["method"] == "DELETE":
-                            params = [{"name": "id", "type": "int"}]
-                        
-                        # 判断是否选中
-                        is_selected = selected_interface == f"{group_name}_{interface['name']}"
+                    ui.label(f"({len(methods)}个方法)").classes('text-gray-500 text-sm')
+                if expanded:
+                    for method in methods:
+                        is_selected = selected_interface == f"{group_name}_{method['name']}"
                         bg_class = "bg-blue-100" if is_selected else "bg-gray-50"
-                        
-                        def select_interface(name=group_name, interface_name=interface["name"], interface_params=params):
+                        def select_method(name=group_name, method_name=method["name"], params=method["params"]):
                             global selected_interface
-                            selected_interface = f"{name}_{interface_name}"
-                            # 更新右侧参数列表
-                            update_param_list(interface_params)
-                            # 重新渲染接口列表
+                            selected_interface = f"{name}_{method_name}"
+                            update_param_list(params)
                             switch_status("接口列表", display_area)
-                        
                         with ui.row().classes(f'w-full items-center py-2 border-b border-gray-100 {bg_class} pl-8 cursor-pointer hover:bg-gray-100 relative'):
-                            ui.label(interface["name"]).classes('font-medium flex-1')
-                            param_names = [param["name"] for param in params]
+                            ui.label(method["name"]).classes('font-medium flex-1')
+                            param_names = [param["name"] for param in method["params"]]
                             ui.label(f"参数: {', '.join(param_names)}").classes('text-gray-600 text-sm flex-1')
-                            
-                            # 添加点击事件
-                            ui.button('', on_click=select_interface).props('flat').classes('absolute inset-0 bg-transparent')
+                            ui.button('', on_click=select_method).props('flat').classes('absolute inset-0 bg-transparent')
         
         elif status == "历史记录":
             ui.label('历史记录').classes('text-xl font-bold mb-4')
@@ -582,14 +610,14 @@ with ui.row().classes('w-full h-screen mt-0'):
         ui.button('历史记录', on_click=lambda: switch_status("历史记录", display_area)).classes('w-full')
     ui.separator().classes('w-[1px] h-screen bg-gray-300')  # 垂直分割线
     # 显示历史记录还是接口列表区域
-    with ui.column().classes('w-96 mx-0 p-0'):
+    with ui.column().classes('w-96 mx-0 p-0 h-full'):
         # 上方搜索框 - 居中并占满宽度
         with ui.row().classes('w-full justify-center px-2 py-2'):
             with ui.row().classes('w-full max-w-sm gap-2'):
                 ui.input(placeholder='搜索...').classes('flex-1')
                 ui.button('搜索').classes('bg-blue-500 text-white')
         # 下方展示数据区域
-        with ui.scroll_area().classes("h-screen"):
+        with ui.scroll_area().classes('h-full'):
             display_area = ui.column().classes('w-full -m-3')
 
     ui.separator().classes('w-[1px] h-screen bg-gray-300')  # 垂直分割线
